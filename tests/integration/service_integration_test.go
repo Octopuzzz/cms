@@ -48,19 +48,14 @@ func (s *IntegrationTestSuite) SetupSuite() {
 
 	s.svcSvc = services.NewServiceService(s.connMgr)
 	s.dataSvc = services.NewDynamicDataService(s.connMgr, s.svcSvc)
-	s.authSvc = services.NewAuthService(s.getDB(), &config.JWTConfig{
+
+	conn, err := s.connMgr.GetDefaultConnection()
+	s.Require().NoError(err)
+	s.authSvc = services.NewAuthService(conn.DB, &config.JWTConfig{
 		Secret:             "integration-test-secret",
 		AccessTokenExpire:  15 * time.Minute,
 		RefreshTokenExpire: 7 * 24 * time.Hour,
 	})
-}
-
-func (s *IntegrationTestSuite) getDB() interface{ DB() interface{} } {
-	conn, err := s.connMgr.GetDefaultConnection()
-	s.Require().NoError(err)
-	_ = err
-	_ = conn
-	return nil
 }
 
 // TestCreateService verifies service creation, slug generation, and table creation
