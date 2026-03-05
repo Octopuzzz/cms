@@ -386,6 +386,36 @@ type CustomValidation struct {
 
 func (CustomValidation) TableName() string { return "custom_validations" }
 
+// ==================== MIGRATION ====================
+
+// Migration represents a schema migration record
+type Migration struct {
+	BaseModel
+	ServiceID      uint       `json:"service_id" gorm:"index;not null"`
+	Description    string     `json:"description" gorm:"size:500;not null"`
+	Status         string     `json:"status" gorm:"size:50;not null;default:'pending'"` // pending, applied, failed, rolled_back
+	SchemaSnapshot string     `json:"schema_snapshot,omitempty" gorm:"type:text"`
+	ErrorMessage   string     `json:"error_message,omitempty" gorm:"type:text"`
+	AppliedAt      *time.Time `json:"applied_at"`
+}
+
+func (Migration) TableName() string { return "migrations" }
+
+// ==================== BACKUP ====================
+
+// Backup represents a service data/schema backup
+type Backup struct {
+	BaseModel
+	ServiceID  uint   `json:"service_id" gorm:"index;not null"`
+	Type       string `json:"type" gorm:"size:50;not null"` // snapshot, schema, data
+	Status     string `json:"status" gorm:"size:50;not null;default:'pending'"`
+	SchemaData string `json:"schema_data,omitempty" gorm:"type:text"`
+	TableData  string `json:"-" gorm:"type:text"` // hidden from JSON by default (may be large)
+	RowCount   int    `json:"row_count"`
+}
+
+func (Backup) TableName() string { return "backups" }
+
 // ==================== AUDIT LOG ====================
 
 type AuditLog struct {
@@ -492,6 +522,8 @@ func AllModels() []interface{} {
 		&Field{},
 		&ServicePermission{},
 		&CustomValidation{},
+		&Migration{},
+		&Backup{},
 		&AuditLog{},
 		&APIToken{},
 	}

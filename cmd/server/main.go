@@ -40,6 +40,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -91,6 +92,8 @@ func main() {
 	dbConnSvc := services.NewDBConnService(db)
 	valSvc := services.NewValidationService(db)
 	menuSvc := services.NewMenuService(db)
+	migSvc := services.NewMigrationService(connManager)
+	backupSvc := services.NewBackupService(connManager)
 
 	// Handlers
 	authH := handlers.NewAuthHandler(authSvc)
@@ -101,6 +104,8 @@ func main() {
 	dbConnH := handlers.NewDBConnectionHandler(dbConnSvc, connManager)
 	menuH := handlers.NewMenuHandler(menuSvc)
 	valH := handlers.NewValidationHandler(valSvc)
+	migH := handlers.NewMigrationHandler(migSvc)
+	backupH := handlers.NewBackupHandler(backupSvc)
 
 	// Router
 	gin.SetMode(cfg.Server.Mode)
@@ -124,6 +129,12 @@ func main() {
 		router.Use(middleware.RateLimiter(cfg.RateLimit.RPS, cfg.RateLimit.Burst))
 	}
 
+	// Prometheus metrics middleware
+	router.Use(middleware.PrometheusMetrics())
+
+	// Prometheus metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	// Swagger
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -141,7 +152,7 @@ func main() {
 
 	// API v1
 	v1 := router.Group("/api/v1")
-	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH)
+	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -186,6 +197,8 @@ func setupRoutes(
 	dbConnH *handlers.DBConnectionHandler,
 	menuH *handlers.MenuHandler,
 	valH *handlers.ValidationHandler,
+	migH *handlers.MigrationHandler,
+	backupH *handlers.BackupHandler,
 ) {
 	// Public auth routes
 	auth := v1.Group("/auth")
@@ -265,6 +278,31 @@ func setupRoutes(
 		{
 			vals.GET("", valH.ListValidations)
 			vals.POST("", middleware.RequireRole("admin", "super_admin"), valH.CreateValidation)
+		}
+
+		// CMS Control Plane
+		cms := protected.Group("/cms")
+		cms.Use(middleware.RequireRole("admin", "super_admin"))
+		{
+			// Database connections (CMS aliases)
+			cms.GET("/databases", dbConnH.ListConnections)
+			cms.POST("/databases", dbConnH.CreateConnection)
+
+			// Services (CMS aliases)
+			cms.GET("/services", svcH.ListServices)
+			cms.POST("/services", svcH.CreateService)
+
+			// Relations are managed via service field relation_config
+
+			// Migrations
+			cms.POST("/migrations", migH.CreateMigration)
+			cms.GET("/migrations/service/:service_id", migH.ListMigrations)
+			cms.POST("/migrations/:id/rollback", migH.RollbackMigration)
+
+			// Backups
+			cms.POST("/backup/service/:service_id", backupH.CreateBackup)
+			cms.GET("/backup/service/:service_id", backupH.ListBackups)
+			cms.POST("/restore/:id", backupH.RestoreBackup)
 		}
 	}
 }
