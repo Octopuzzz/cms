@@ -19,11 +19,13 @@ import (
 // IntegrationTestSuite tests services against a real in-memory SQLite DB
 type IntegrationTestSuite struct {
 	suite.Suite
-	ctx     context.Context
-	connMgr *database.ConnectionManager
-	svcSvc  *services.ServiceService
-	dataSvc *services.DynamicDataService
-	authSvc *services.AuthService
+	ctx       context.Context
+	connMgr   *database.ConnectionManager
+	svcSvc    *services.ServiceService
+	dataSvc   *services.DynamicDataService
+	authSvc   *services.AuthService
+	migSvc    *services.MigrationService
+	backupSvc *services.BackupService
 }
 
 func (s *IntegrationTestSuite) SetupSuite() {
@@ -48,19 +50,16 @@ func (s *IntegrationTestSuite) SetupSuite() {
 
 	s.svcSvc = services.NewServiceService(s.connMgr)
 	s.dataSvc = services.NewDynamicDataService(s.connMgr, s.svcSvc)
-	s.authSvc = services.NewAuthService(s.getDB(), &config.JWTConfig{
+	s.migSvc = services.NewMigrationService(s.connMgr)
+	s.backupSvc = services.NewBackupService(s.connMgr)
+
+	conn, err := s.connMgr.GetDefaultConnection()
+	s.Require().NoError(err)
+	s.authSvc = services.NewAuthService(conn.DB, &config.JWTConfig{
 		Secret:             "integration-test-secret",
 		AccessTokenExpire:  15 * time.Minute,
 		RefreshTokenExpire: 7 * 24 * time.Hour,
 	})
-}
-
-func (s *IntegrationTestSuite) getDB() interface{ DB() interface{} } {
-	conn, err := s.connMgr.GetDefaultConnection()
-	s.Require().NoError(err)
-	_ = err
-	_ = conn
-	return nil
 }
 
 // TestCreateService verifies service creation, slug generation, and table creation
@@ -179,6 +178,71 @@ func (s *IntegrationTestSuite) TestAuthIntegration() {
 	newTokens, err := authSvc.RefreshTokens(s.ctx, tokens.RefreshToken)
 	require.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), newTokens.AccessToken)
+}
+
+// TestMigrationService tests schema migration operations
+func (s *IntegrationTestSuite) TestMigrationService() {
+	// Create a service first
+	svc, err := s.svcSvc.CreateService(s.ctx, &services.CreateServiceRequest{
+		Name: "Migration Test Service",
+		Fields: []services.CreateFieldRequest{
+			{Name: "title", Label: "Title", Type: models.FieldTypeString},
+		},
+	}, 1)
+	require.NoError(s.T(), err)
+
+	// Apply a migration to add a column
+	migration, err := s.migSvc.CreateMigration(s.ctx, &services.MigrationRequest{
+		ServiceID:   svc.ID,
+		Description: "Add description column",
+		Operations: []services.MigrationOperation{
+			{Type: "add_column", Column: "description", ColumnType: "TEXT", Nullable: true},
+		},
+	}, 1)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), "applied", migration.Status)
+	assert.NotNil(s.T(), migration.AppliedAt)
+
+	// List migrations
+	migrations, err := s.migSvc.ListMigrations(s.ctx, svc.ID)
+	require.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(migrations), 1)
+
+	// Rollback
+	err = s.migSvc.RollbackMigration(s.ctx, migration.ID)
+	require.NoError(s.T(), err)
+}
+
+// TestBackupService tests backup and restore operations
+func (s *IntegrationTestSuite) TestBackupService() {
+	// Create a service first
+	svc, err := s.svcSvc.CreateService(s.ctx, &services.CreateServiceRequest{
+		Name: "Backup Test Service",
+		Fields: []services.CreateFieldRequest{
+			{Name: "name", Label: "Name", Type: models.FieldTypeString},
+		},
+	}, 1)
+	require.NoError(s.T(), err)
+
+	// Create a backup
+	backup, err := s.backupSvc.CreateBackup(s.ctx, svc.ID, 1)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), "completed", backup.Status)
+	assert.Equal(s.T(), "snapshot", backup.Type)
+
+	// List backups
+	backups, err := s.backupSvc.ListBackups(s.ctx, svc.ID)
+	require.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(backups), 1)
+
+	// Get backup
+	fetched, err := s.backupSvc.GetBackup(s.ctx, backup.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), backup.ID, fetched.ID)
+
+	// Restore backup
+	err = s.backupSvc.RestoreBackup(s.ctx, backup.ID)
+	require.NoError(s.T(), err)
 }
 
 func TestIntegrationSuite(t *testing.T) {

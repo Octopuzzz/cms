@@ -1,0 +1,40 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server
+bin/
+
+# Build artifacts
+cms-backend
+cms_backend.db
+*.db
+
+# Test
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Dependencies (vendor mode)
+vendor/
+
+# Swagger generated docs
+docs/
+
+# Temporary files
+tmp/
+*.tmp
