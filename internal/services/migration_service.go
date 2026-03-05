@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"cms-backend/internal/database"
@@ -13,6 +14,17 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// identifierRegex validates SQL identifiers (table/column names)
+var identifierRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,63}$`)
+
+// validateIdentifier checks that a string is a safe SQL identifier
+func validateIdentifier(name string) error {
+	if !identifierRegex.MatchString(name) {
+		return fmt.Errorf("invalid identifier: %q", name)
+	}
+	return nil
+}
 
 // MigrationService handles schema migration operations
 type MigrationService struct {
@@ -123,20 +135,45 @@ func (s *MigrationService) CreateMigration(ctx context.Context, req *MigrationRe
 	return migration, nil
 }
 
-// applyOperation executes a single DDL operation
+// applyOperation executes a single DDL operation with identifier validation
 func (s *MigrationService) applyOperation(db *gorm.DB, tableName string, op *MigrationOperation) error {
+	// Validate table name
+	if err := validateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+	// Validate column name
+	if err := validateIdentifier(op.Column); err != nil {
+		return fmt.Errorf("invalid column name: %w", err)
+	}
+
 	switch op.Type {
 	case "add_column":
 		colType := op.ColumnType
 		if colType == "" {
 			colType = "TEXT"
 		}
+		if err := validateIdentifier(colType); colType != "TEXT" && err != nil {
+			// Allow compound types like "TIMESTAMP WITH TIME ZONE" via whitelist
+			allowed := map[string]bool{
+				"TEXT": true, "INTEGER": true, "INT": true, "BIGINT": true,
+				"REAL": true, "FLOAT": true, "DOUBLE": true, "DOUBLE PRECISION": true,
+				"BOOLEAN": true, "DATE": true, "DATETIME": true, "TIMESTAMP": true,
+				"TIMESTAMP WITH TIME ZONE": true, "JSON": true, "JSONB": true,
+				"UUID": true, "VARCHAR(255)": true, "TINYINT(1)": true,
+				"DATETIME(3)": true, "LONGTEXT": true,
+			}
+			if !allowed[colType] {
+				return fmt.Errorf("unsupported column type: %q", colType)
+			}
+		}
 		sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, op.Column, colType)
 		if !op.Nullable {
 			sql += " NOT NULL"
 		}
 		if op.Default != "" {
-			sql += fmt.Sprintf(" DEFAULT '%s'", op.Default)
+			// Use parameterized default value to prevent injection
+			sql += " DEFAULT ?"
+			return db.Exec(sql, op.Default).Error
 		}
 		return db.Exec(sql).Error
 
@@ -146,6 +183,9 @@ func (s *MigrationService) applyOperation(db *gorm.DB, tableName string, op *Mig
 	case "rename_column":
 		if op.NewName == "" {
 			return errors.New("new_name is required for rename_column")
+		}
+		if err := validateIdentifier(op.NewName); err != nil {
+			return fmt.Errorf("invalid new column name: %w", err)
 		}
 		return db.Exec(fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", tableName, op.Column, op.NewName)).Error
 
@@ -176,7 +216,9 @@ func (s *MigrationService) ListMigrations(ctx context.Context, serviceID uint) (
 	return migrations, nil
 }
 
-// RollbackMigration rolls back the last applied migration by restoring schema from snapshot
+// RollbackMigration marks a migration as rolled back.
+// Note: This updates the migration status but does not automatically reverse DDL changes.
+// For full schema rollback, apply a new migration with the inverse operations.
 func (s *MigrationService) RollbackMigration(ctx context.Context, migrationID uint) error {
 	conn, err := s.connManager.GetDefaultConnection()
 	if err != nil {

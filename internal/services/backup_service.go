@@ -136,6 +136,11 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID uint) error 
 		}
 	}
 
+	// Validate table name to prevent SQL injection
+	if !identifierRegex.MatchString(svc.DbTableName) {
+		return fmt.Errorf("invalid table name: %q", svc.DbTableName)
+	}
+
 	// Parse data
 	var rows []map[string]interface{}
 	if err := json.Unmarshal([]byte(backup.TableData), &rows); err != nil {
@@ -145,13 +150,18 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID uint) error 
 	// Clear existing data (soft-delete approach: mark as deleted)
 	targetConn.DB.Exec(fmt.Sprintf("UPDATE %s SET deleted_at = ? WHERE deleted_at IS NULL", svc.DbTableName), time.Now())
 
-	// Insert restored rows
+	// Insert restored rows, collecting errors
+	var restoreErrors int
 	for _, row := range rows {
 		delete(row, "id")
 		delete(row, "deleted_at")
 		if err := targetConn.DB.Table(svc.DbTableName).Create(row).Error; err != nil {
-			continue // best effort
+			restoreErrors++
 		}
+	}
+
+	if restoreErrors > 0 {
+		return fmt.Errorf("restore completed with %d error(s) out of %d rows", restoreErrors, len(rows))
 	}
 
 	return nil
