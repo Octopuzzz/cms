@@ -106,6 +106,7 @@ func main() {
 	valH := handlers.NewValidationHandler(valSvc)
 	migH := handlers.NewMigrationHandler(migSvc)
 	backupH := handlers.NewBackupHandler(backupSvc)
+	gqlH := handlers.NewGraphQLHandler(dynamicDataSvc)
 
 	// Router
 	gin.SetMode(cfg.Server.Mode)
@@ -152,7 +153,7 @@ func main() {
 
 	// API v1
 	v1 := router.Group("/api/v1")
-	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
+	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH, gqlH)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -199,7 +200,15 @@ func setupRoutes(
 	valH *handlers.ValidationHandler,
 	migH *handlers.MigrationHandler,
 	backupH *handlers.BackupHandler,
+	gqlH *handlers.GraphQLHandler,
 ) {
+	// GraphQL Gateway
+	gql := v1.Group("/graphql")
+	// If you want auth for the playground:
+	// gql.Use(middleware.Auth(authSvc))
+	gql.POST("", middleware.Auth(authSvc), gqlH.Serve())
+	gql.GET("", gqlH.Playground())
+
 	// Public auth routes
 	auth := v1.Group("/auth")
 	{

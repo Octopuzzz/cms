@@ -1,0 +1,14 @@
+scalar JSON
+
+type Query {
+  # Generic access to dynamic services
+  data(service: String!, id: ID!): JSON
+  list(service: String!, page: Int, limit: Int, search: String): [JSON]
+}
+
+type Mutation {
+  # Generic mutation for dynamic services
+  create(service: String!, data: JSON!): JSON
+  update(service: String!, id: ID!, data: JSON!): JSON
+  delete(service: String!, id: ID!): Boolean
+}
