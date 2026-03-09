@@ -544,3 +544,18 @@ func toSlug(name string) string {
 	_ = time.Now() // suppress time import warning
 	return s
 }
+
+// GetAllActiveServices returns all services that are currently active
+func (s *ServiceService) GetAllActiveServices() ([]models.Service, error) {
+	conn, err := s.connManager.GetDefaultConnection()
+	if err != nil {
+		return nil, err
+	}
+
+	var services []models.Service
+	if err := conn.DB.Preload("Fields").Where("is_active = ?", true).Find(&services).Error; err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}
