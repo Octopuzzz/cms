@@ -107,6 +107,9 @@ func main() {
 	migH := handlers.NewMigrationHandler(migSvc)
 	backupH := handlers.NewBackupHandler(backupSvc)
 
+	// GraphQL
+	graphqlH := handlers.NewGraphQLHandler(svcService, connManager)
+
 	// Router
 	gin.SetMode(cfg.Server.Mode)
 	router := gin.New()
@@ -152,7 +155,7 @@ func main() {
 
 	// API v1
 	v1 := router.Group("/api/v1")
-	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
+	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH, graphqlH)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -199,7 +202,12 @@ func setupRoutes(
 	valH *handlers.ValidationHandler,
 	migH *handlers.MigrationHandler,
 	backupH *handlers.BackupHandler,
+	graphqlH *handlers.GraphQLHandler,
 ) {
+	// GraphQL routes (public for now, can be protected)
+	v1.POST("/graphql", graphqlH.Handler())
+	v1.GET("/graphql/playground", graphqlH.PlaygroundHandler())
+
 	// Public auth routes
 	auth := v1.Group("/auth")
 	{
