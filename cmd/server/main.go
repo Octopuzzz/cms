@@ -32,6 +32,7 @@ import (
 
 	"cms-backend/internal/config"
 	"cms-backend/internal/database"
+	"cms-backend/internal/graphql"
 	"cms-backend/internal/handlers"
 	"cms-backend/internal/middleware"
 	"cms-backend/internal/services"
@@ -87,6 +88,13 @@ func main() {
 	authSvc := services.NewAuthService(db, &cfg.JWT)
 	svcService := services.NewServiceService(connManager)
 	dynamicDataSvc := services.NewDynamicDataService(connManager, svcService)
+
+	// GraphQL Engine
+	gqlEngine := graphql.NewEngine(dynamicDataSvc, svcService)
+	if err := gqlEngine.ReloadSchema(context.Background()); err != nil {
+		log.Error("Failed to initialize GraphQL schema", "error", err)
+	}
+
 	userSvc := services.NewUserService(db)
 	roleSvc := services.NewRoleService(db)
 	dbConnSvc := services.NewDBConnService(db)
@@ -106,6 +114,7 @@ func main() {
 	valH := handlers.NewValidationHandler(valSvc)
 	migH := handlers.NewMigrationHandler(migSvc)
 	backupH := handlers.NewBackupHandler(backupSvc)
+	gqlH := handlers.NewGraphQLHandler(gqlEngine)
 
 	// Router
 	gin.SetMode(cfg.Server.Mode)
@@ -152,7 +161,7 @@ func main() {
 
 	// API v1
 	v1 := router.Group("/api/v1")
-	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
+	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH, gqlH)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -199,6 +208,7 @@ func setupRoutes(
 	valH *handlers.ValidationHandler,
 	migH *handlers.MigrationHandler,
 	backupH *handlers.BackupHandler,
+	gqlH *handlers.GraphQLHandler,
 ) {
 	// Public auth routes
 	auth := v1.Group("/auth")
@@ -303,6 +313,12 @@ func setupRoutes(
 			cms.POST("/backup/service/:service_id", backupH.CreateBackup)
 			cms.GET("/backup/service/:service_id", backupH.ListBackups)
 			cms.POST("/restore/:id", backupH.RestoreBackup)
+
+			// GraphQL Management
+			cms.POST("/graphql/reload", gqlH.ReloadSchema)
 		}
+
+		// GraphQL Endpoint (public or protected based on your needs, currently protected)
+		protected.POST("/graphql", gqlH.Handle)
 	}
 }
