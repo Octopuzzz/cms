@@ -1,0 +1,1 @@
+grep -ri "graphql" ./internal
