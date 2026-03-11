@@ -87,6 +87,7 @@ func main() {
 	authSvc := services.NewAuthService(db, &cfg.JWT)
 	svcService := services.NewServiceService(connManager)
 	dynamicDataSvc := services.NewDynamicDataService(connManager, svcService)
+	graphqlSvc := services.NewGraphQLService(dynamicDataSvc, svcService)
 	userSvc := services.NewUserService(db)
 	roleSvc := services.NewRoleService(db)
 	dbConnSvc := services.NewDBConnService(db)
@@ -99,6 +100,7 @@ func main() {
 	authH := handlers.NewAuthHandler(authSvc)
 	svcH := handlers.NewServiceHandler(svcService)
 	dataH := handlers.NewDynamicDataHandler(dynamicDataSvc, svcService)
+	graphqlH := handlers.NewGraphQLHandler(graphqlSvc)
 	userH := handlers.NewUserHandler(userSvc)
 	roleH := handlers.NewRoleHandler(roleSvc)
 	dbConnH := handlers.NewDBConnectionHandler(dbConnSvc, connManager)
@@ -152,7 +154,7 @@ func main() {
 
 	// API v1
 	v1 := router.Group("/api/v1")
-	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
+	setupRoutes(v1, authSvc, authH, svcH, dataH, graphqlH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -192,6 +194,7 @@ func setupRoutes(
 	authH *handlers.AuthHandler,
 	svcH *handlers.ServiceHandler,
 	dataH *handlers.DynamicDataHandler,
+	graphqlH *handlers.GraphQLHandler,
 	userH *handlers.UserHandler,
 	roleH *handlers.RoleHandler,
 	dbConnH *handlers.DBConnectionHandler,
@@ -247,6 +250,9 @@ func setupRoutes(
 			data.GET("/:slug/:id", dataH.GetDataByID)
 			data.PUT("/:slug/:id", dataH.UpdateData)
 			data.DELETE("/:slug/:id", dataH.DeleteData)
+
+			// Optional GraphQL Gateway route
+			data.POST("/:slug/graphql", graphqlH.HandleGraphQL)
 		}
 
 		// Users (admin only)
