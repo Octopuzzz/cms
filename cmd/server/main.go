@@ -32,6 +32,7 @@ import (
 
 	"cms-backend/internal/config"
 	"cms-backend/internal/database"
+	"cms-backend/internal/graphql"
 	"cms-backend/internal/handlers"
 	"cms-backend/internal/middleware"
 	"cms-backend/internal/services"
@@ -153,6 +154,10 @@ func main() {
 	// API v1
 	v1 := router.Group("/api/v1")
 	setupRoutes(v1, authSvc, authH, svcH, dataH, userH, roleH, dbConnH, menuH, valH, migH, backupH)
+
+	// GraphQL setup
+	v1.POST("/graphql", graphql.NewGateway())
+	v1.GET("/graphql/playground", graphql.PlaygroundHandler())
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
