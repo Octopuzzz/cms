@@ -199,6 +199,20 @@ func (cm *ConnectionManager) GetRedis() *redis.Client {
 	return cm.redisClient
 }
 
+// NewTestConnectionManager creates a ConnectionManager with a predefined default connection for testing
+func NewTestConnectionManager(db *gorm.DB) *ConnectionManager {
+	cm := &ConnectionManager{
+		connections: make(map[string]*DBConnection),
+		defaultDB:   "default",
+	}
+	cm.connections["default"] = &DBConnection{
+		ID:   "default",
+		Name: "Default Test Database",
+		DB:   db,
+	}
+	return cm
+}
+
 // Close closes all connections
 func (cm *ConnectionManager) Close() {
 	cm.mu.Lock()
