@@ -2,20 +2,14 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 
+	"cms-backend/internal/contextutils"
 	"cms-backend/internal/services"
 	"cms-backend/pkg/response"
 
 	"github.com/gin-gonic/gin"
-)
-
-const (
-	ContextUserID       = "user_id"
-	ContextUsername     = "username"
-	ContextRoles        = "roles"
-	ContextIsSuperAdmin = "is_super_admin"
-	ContextClaims       = "claims"
 )
 
 // Auth is the JWT authentication middleware
@@ -42,11 +36,19 @@ func Auth(authSvc *services.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		c.Set(ContextUserID, claims.UserID)
-		c.Set(ContextUsername, claims.Username)
-		c.Set(ContextRoles, claims.Roles)
-		c.Set(ContextIsSuperAdmin, claims.IsSuperAdmin)
-		c.Set(ContextClaims, claims)
+		c.Set(string(contextutils.ContextUserID), claims.UserID)
+		c.Set(string(contextutils.ContextUsername), claims.Username)
+		c.Set(string(contextutils.ContextRoles), claims.Roles)
+		c.Set(string(contextutils.ContextIsSuperAdmin), claims.IsSuperAdmin)
+		c.Set(string(contextutils.ContextClaims), claims)
+
+		ctx := context.WithValue(c.Request.Context(), contextutils.ContextUserID, claims.UserID)
+		ctx = context.WithValue(ctx, contextutils.ContextUsername, claims.Username)
+		ctx = context.WithValue(ctx, contextutils.ContextRoles, claims.Roles)
+		ctx = context.WithValue(ctx, contextutils.ContextIsSuperAdmin, claims.IsSuperAdmin)
+		ctx = context.WithValue(ctx, contextutils.ContextClaims, claims)
+		c.Request = c.Request.WithContext(ctx)
+
 		c.Next()
 	}
 }
@@ -59,9 +61,14 @@ func OptionalAuth(authSvc *services.AuthService) gin.HandlerFunc {
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
 				if claims, err := authSvc.ValidateToken(parts[1]); err == nil {
-					c.Set(ContextUserID, claims.UserID)
-					c.Set(ContextRoles, claims.Roles)
-					c.Set(ContextIsSuperAdmin, claims.IsSuperAdmin)
+					c.Set(string(contextutils.ContextUserID), claims.UserID)
+					c.Set(string(contextutils.ContextRoles), claims.Roles)
+					c.Set(string(contextutils.ContextIsSuperAdmin), claims.IsSuperAdmin)
+
+					ctx := context.WithValue(c.Request.Context(), contextutils.ContextUserID, claims.UserID)
+					ctx = context.WithValue(ctx, contextutils.ContextRoles, claims.Roles)
+					ctx = context.WithValue(ctx, contextutils.ContextIsSuperAdmin, claims.IsSuperAdmin)
+					c.Request = c.Request.WithContext(ctx)
 				}
 			}
 		}
@@ -72,13 +79,13 @@ func OptionalAuth(authSvc *services.AuthService) gin.HandlerFunc {
 // RequireRole ensures the user has at least one of the specified roles
 func RequireRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		isSuperAdmin, _ := c.Get(ContextIsSuperAdmin)
+		isSuperAdmin, _ := c.Get(string(contextutils.ContextIsSuperAdmin))
 		if sa, ok := isSuperAdmin.(bool); ok && sa {
 			c.Next()
 			return
 		}
 
-		userRoles, _ := c.Get(ContextRoles)
+		userRoles, _ := c.Get(string(contextutils.ContextRoles))
 		roleList, ok := userRoles.([]string)
 		if !ok {
 			response.Forbidden(c, "")
@@ -107,7 +114,7 @@ func SuperAdmin() gin.HandlerFunc {
 
 // GetUserID extracts the user ID from the context
 func GetUserID(c *gin.Context) uint {
-	if v, ok := c.Get(ContextUserID); ok {
+	if v, ok := c.Get(string(contextutils.ContextUserID)); ok {
 		if id, ok := v.(uint); ok {
 			return id
 		}
@@ -117,7 +124,7 @@ func GetUserID(c *gin.Context) uint {
 
 // GetRoles extracts roles from the context
 func GetRoles(c *gin.Context) []string {
-	if v, ok := c.Get(ContextRoles); ok {
+	if v, ok := c.Get(string(contextutils.ContextRoles)); ok {
 		if roles, ok := v.([]string); ok {
 			return roles
 		}
@@ -127,7 +134,7 @@ func GetRoles(c *gin.Context) []string {
 
 // IsSuperAdmin checks if current user is super admin
 func IsSuperAdmin(c *gin.Context) bool {
-	if v, ok := c.Get(ContextIsSuperAdmin); ok {
+	if v, ok := c.Get(string(contextutils.ContextIsSuperAdmin)); ok {
 		if sa, ok := v.(bool); ok {
 			return sa
 		}
