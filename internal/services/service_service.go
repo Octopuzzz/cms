@@ -354,12 +354,25 @@ func (s *ServiceService) SetPermissions(ctx context.Context, serviceID uint, per
 	if err != nil {
 		return err
 	}
-	// Remove existing
-	conn.DB.Where("service_id = ?", serviceID).Delete(&models.ServicePermission{})
-	for i := range perms {
-		perms[i].ServiceID = serviceID
-	}
-	return conn.DB.CreateInBatches(perms, 10).Error
+
+	return conn.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Remove existing
+		if err := tx.Where("service_id = ?", serviceID).Delete(&models.ServicePermission{}).Error; err != nil {
+			return err
+		}
+
+		for i := range perms {
+			perms[i].ServiceID = serviceID
+		}
+
+		if len(perms) > 0 {
+			if err := tx.CreateInBatches(perms, 10).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetPermissionsForRole checks if a role has access to a service action
