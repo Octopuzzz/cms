@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"cms-backend/internal/database"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
@@ -227,6 +229,65 @@ func TestRoleService_CRUD(t *testing.T) {
 	// Delete
 	err = svc.DeleteRole(ctx, role.ID)
 	require.NoError(t, err)
+}
+
+// --- DynamicDataService Tests ---
+
+func TestDynamicDataService_ListData_SortValidation(t *testing.T) {
+	db := setupTestDB(t)
+	cm := database.GetConnectionManager()
+	cm.AddConnection("default", "sqlite", ":memory:", db, 1, 10, time.Hour)
+
+	// Create required models and services
+	db.Create(&models.Service{
+		Name:        "Test Sort Service",
+		Slug:        "test-sort-svc",
+		DbTableName: "test_sort_svc",
+		Fields: []models.Field{
+			{Name: "custom_field", Type: "string"},
+		},
+	})
+
+	svc := services.NewServiceService(cm)
+	dds := services.NewDynamicDataService(cm, svc)
+	ctx := context.Background()
+
+	// Mock resolveServiceDB internally or bypass for simple test if needed, assuming the mock DB doesn't require a real ConnectionManager connection here
+	// Given the internal implementation uses resolveServiceDB which depends on connManager
+	// We'll simulate a controlled test where we verify error cases
+
+	// Valid sort
+	reqValid := &services.ListDataRequest{
+		Page:     1,
+		PageSize: 10,
+		SortBy:   "id",
+	}
+	_, _, err := dds.ListData(ctx, "test-sort-svc", reqValid)
+	// It may fail later in execution due to mocking cm, but shouldn't fail validation
+	if err != nil && err.Error() == "invalid sort field: id" {
+		t.Fatalf("Expected 'id' to be a valid sort field")
+	}
+
+	// Valid sort with dynamic field
+	reqValidField := &services.ListDataRequest{
+		Page:     1,
+		PageSize: 10,
+		SortBy:   "custom_field",
+	}
+	_, _, err = dds.ListData(ctx, "test-sort-svc", reqValidField)
+	if err != nil && err.Error() == "invalid sort field: custom_field" {
+		t.Fatalf("Expected 'custom_field' to be a valid sort field")
+	}
+
+	// Invalid sort (SQL Injection attempt)
+	reqInvalid := &services.ListDataRequest{
+		Page:     1,
+		PageSize: 10,
+		SortBy:   "id; DROP TABLE users;",
+	}
+	_, _, err = dds.ListData(ctx, "test-sort-svc", reqInvalid)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid sort field")
 }
 
 // --- DBConnService Tests ---

@@ -165,6 +165,24 @@ func (cm *ConnectionManager) CreateConnection(ctx context.Context, dbConn *model
 	return conn, nil
 }
 
+// AddConnection adds a pre-configured connection to the manager (used for testing)
+func (cm *ConnectionManager) AddConnection(id, connType, dbName string, db *gorm.DB, maxOpen, maxIdle int, maxLifetime time.Duration) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.connections[id] = &DBConnection{
+		ID:              id,
+		Type:            connType,
+		Database:        dbName,
+		DB:              db,
+		MaxOpenConns:    maxOpen,
+		MaxIdleConns:    maxIdle,
+		ConnMaxLifetime: maxLifetime,
+	}
+	if id == "default" {
+		cm.defaultDB = id
+	}
+}
+
 // GetConnection retrieves a connection by model ID
 func (cm *ConnectionManager) GetConnection(connID uint) (*DBConnection, error) {
 	cm.mu.RLock()
