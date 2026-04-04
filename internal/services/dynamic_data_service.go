@@ -125,8 +125,26 @@ func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *Lis
 	// Data query
 	sortBy := "id"
 	if req.SortBy != "" {
-		sortBy = req.SortBy
+		// Validate SortBy against a whitelist
+		allowedColumns := map[string]bool{
+			"id":         true,
+			"created_at": true,
+			"updated_at": true,
+			"deleted_at": true,
+			"created_by": true,
+			"updated_by": true,
+		}
+		for _, field := range svc.Fields {
+			allowedColumns[field.Name] = true
+		}
+
+		if allowedColumns[req.SortBy] {
+			sortBy = req.SortBy
+		} else {
+			return nil, 0, fmt.Errorf("invalid sort field: %s", req.SortBy)
+		}
 	}
+
 	sortOrder := "DESC"
 	if strings.ToUpper(req.SortOrder) == "ASC" {
 		sortOrder = "ASC"
