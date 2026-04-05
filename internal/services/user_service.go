@@ -73,13 +73,20 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 	}
 
 	if len(req.RoleIDs) > 0 {
-		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: roleID})
+		userRoles := make([]models.UserRole, len(req.RoleIDs))
+		for i, roleID := range req.RoleIDs {
+			userRoles[i] = models.UserRole{UserID: user.ID, RoleID: roleID}
+		}
+		if err := s.db.CreateInBatches(&userRoles, len(userRoles)).Error; err != nil {
+			// In production, should rollback transaction
+			return nil, err
 		}
 	} else {
 		var viewerRole models.Role
 		if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+			if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -134,8 +141,12 @@ func (s *UserService) UpdateUser(ctx context.Context, id uint, req *UpdateUserRe
 	// Update roles
 	if len(req.RoleIDs) > 0 {
 		s.db.Where("user_id = ?", id).Delete(&models.UserRole{})
-		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: id, RoleID: roleID})
+		userRoles := make([]models.UserRole, len(req.RoleIDs))
+		for i, roleID := range req.RoleIDs {
+			userRoles[i] = models.UserRole{UserID: id, RoleID: roleID}
+		}
+		if err := s.db.CreateInBatches(&userRoles, len(userRoles)).Error; err != nil {
+			return nil, err
 		}
 	}
 
@@ -190,8 +201,12 @@ func (s *RoleService) CreateRole(ctx context.Context, req *CreateRoleRequest) (*
 		return nil, err
 	}
 	if len(req.PermissionIDs) > 0 {
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: role.ID, PermissionID: pid})
+		rolePerms := make([]models.RolePermission, len(req.PermissionIDs))
+		for i, pid := range req.PermissionIDs {
+			rolePerms[i] = models.RolePermission{RoleID: role.ID, PermissionID: pid}
+		}
+		if err := s.db.CreateInBatches(&rolePerms, len(rolePerms)).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, role.ID)
@@ -224,8 +239,12 @@ func (s *RoleService) UpdateRole(ctx context.Context, id uint, req *UpdateRoleRe
 
 	if len(req.PermissionIDs) > 0 {
 		s.db.Where("role_id = ?", id).Delete(&models.RolePermission{})
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: id, PermissionID: pid})
+		rolePerms := make([]models.RolePermission, len(req.PermissionIDs))
+		for i, pid := range req.PermissionIDs {
+			rolePerms[i] = models.RolePermission{RoleID: id, PermissionID: pid}
+		}
+		if err := s.db.CreateInBatches(&rolePerms, len(rolePerms)).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, id)

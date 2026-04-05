@@ -87,7 +87,9 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	// Assign default viewer role
 	var viewerRole models.Role
 	if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-		s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+		if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+			return nil, err // Returning error on failure
+		}
 	}
 
 	user.Password = ""
