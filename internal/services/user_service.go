@@ -68,19 +68,32 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 		IsSuperAdmin: req.IsSuperAdmin,
 	}
 
-	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
-		return nil, err
-	}
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
 
-	if len(req.RoleIDs) > 0 {
-		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: roleID})
+		if len(req.RoleIDs) > 0 {
+			var userRoles []models.UserRole
+			for _, roleID := range req.RoleIDs {
+				userRoles = append(userRoles, models.UserRole{UserID: user.ID, RoleID: roleID})
+			}
+			if err := tx.CreateInBatches(userRoles, 100).Error; err != nil {
+				return err
+			}
+		} else {
+			var viewerRole models.Role
+			if err := tx.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
+				if err := tx.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+					return err
+				}
+			}
 		}
-	} else {
-		var viewerRole models.Role
-		if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
-		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetUser(ctx, user.ID)
@@ -127,16 +140,29 @@ func (s *UserService) UpdateUser(ctx context.Context, id uint, req *UpdateUserRe
 	user.Avatar = req.Avatar
 	user.IsActive = req.IsActive
 
-	if err := s.db.Save(user).Error; err != nil {
-		return nil, err
-	}
-
-	// Update roles
-	if len(req.RoleIDs) > 0 {
-		s.db.Where("user_id = ?", id).Delete(&models.UserRole{})
-		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: id, RoleID: roleID})
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
 		}
+
+		// Update roles
+		if len(req.RoleIDs) > 0 {
+			if err := tx.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+				return err
+			}
+			var userRoles []models.UserRole
+			for _, roleID := range req.RoleIDs {
+				userRoles = append(userRoles, models.UserRole{UserID: id, RoleID: roleID})
+			}
+			if err := tx.CreateInBatches(userRoles, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetUser(ctx, id)
@@ -186,13 +212,23 @@ func (s *RoleService) CreateRole(ctx context.Context, req *CreateRoleRequest) (*
 		return nil, fmt.Errorf("role '%s' already exists", req.Name)
 	}
 	role := &models.Role{Name: req.Name, Description: req.Description, IsActive: true}
-	if err := s.db.Create(role).Error; err != nil {
-		return nil, err
-	}
-	if len(req.PermissionIDs) > 0 {
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: role.ID, PermissionID: pid})
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(role).Error; err != nil {
+			return err
 		}
+		if len(req.PermissionIDs) > 0 {
+			var perms []models.RolePermission
+			for _, pid := range req.PermissionIDs {
+				perms = append(perms, models.RolePermission{RoleID: role.ID, PermissionID: pid})
+			}
+			if err := tx.CreateInBatches(perms, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return s.GetRole(ctx, role.ID)
 }
@@ -220,14 +256,30 @@ func (s *RoleService) UpdateRole(ctx context.Context, id uint, req *UpdateRoleRe
 	}
 	role.Name = req.Name
 	role.Description = req.Description
-	s.db.Save(role)
 
-	if len(req.PermissionIDs) > 0 {
-		s.db.Where("role_id = ?", id).Delete(&models.RolePermission{})
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: id, PermissionID: pid})
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(role).Error; err != nil {
+			return err
 		}
+
+		if len(req.PermissionIDs) > 0 {
+			if err := tx.Where("role_id = ?", id).Delete(&models.RolePermission{}).Error; err != nil {
+				return err
+			}
+			var perms []models.RolePermission
+			for _, pid := range req.PermissionIDs {
+				perms = append(perms, models.RolePermission{RoleID: id, PermissionID: pid})
+			}
+			if err := tx.CreateInBatches(perms, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
+
 	return s.GetRole(ctx, id)
 }
 
