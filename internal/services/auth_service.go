@@ -80,14 +80,23 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		IsActive:  true,
 	}
 
-	if err := s.db.Create(user).Error; err != nil {
-		return nil, err
-	}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
 
-	// Assign default viewer role
-	var viewerRole models.Role
-	if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-		s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+		// Assign default viewer role
+		var viewerRole models.Role
+		if err := tx.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
+			if err := tx.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	user.Password = ""

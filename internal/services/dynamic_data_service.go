@@ -122,9 +122,22 @@ func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *Lis
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE deleted_at IS NULL", svc.DbTableName)
 	db.WithContext(ctx).Raw(countQuery).Scan(&total)
 
+	// Validate SortBy
+	validSortFields := map[string]bool{
+		"id":         true,
+		"created_at": true,
+		"updated_at": true,
+		"deleted_at": true,
+		"created_by": true,
+		"updated_by": true,
+	}
+	for _, f := range svc.Fields {
+		validSortFields[f.Name] = true
+	}
+
 	// Data query
 	sortBy := "id"
-	if req.SortBy != "" {
+	if req.SortBy != "" && validSortFields[req.SortBy] {
 		sortBy = req.SortBy
 	}
 	sortOrder := "DESC"
