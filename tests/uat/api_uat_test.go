@@ -118,6 +118,13 @@ func loginAsAdmin(t *testing.T, router *gin.Engine) string {
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(w, req)
 
+	// Since we can't easily set IsSuperAdmin through register endpoint, we directly set it in DB for testing
+	// In a real application we would have a seeder or an admin registration endpoint
+	connMgr := database.GetConnectionManager()
+	if conn, err := connMgr.GetDefaultConnection(); err == nil {
+		conn.DB.Exec("UPDATE users SET is_super_admin = true WHERE username = 'admin'")
+	}
+
 	// Login
 	body, _ = json.Marshal(map[string]interface{}{
 		"username": "admin",
