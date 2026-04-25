@@ -73,13 +73,19 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 	}
 
 	if len(req.RoleIDs) > 0 {
+		var userRoles []models.UserRole
 		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: roleID})
+			userRoles = append(userRoles, models.UserRole{UserID: user.ID, RoleID: roleID})
+		}
+		if err := s.db.CreateInBatches(userRoles, 100).Error; err != nil {
+			return nil, err
 		}
 	} else {
 		var viewerRole models.Role
 		if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+			if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -133,9 +139,15 @@ func (s *UserService) UpdateUser(ctx context.Context, id uint, req *UpdateUserRe
 
 	// Update roles
 	if len(req.RoleIDs) > 0 {
-		s.db.Where("user_id = ?", id).Delete(&models.UserRole{})
+		if err := s.db.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+			return nil, err
+		}
+		var userRoles []models.UserRole
 		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: id, RoleID: roleID})
+			userRoles = append(userRoles, models.UserRole{UserID: id, RoleID: roleID})
+		}
+		if err := s.db.CreateInBatches(userRoles, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 
@@ -190,8 +202,12 @@ func (s *RoleService) CreateRole(ctx context.Context, req *CreateRoleRequest) (*
 		return nil, err
 	}
 	if len(req.PermissionIDs) > 0 {
+		var rolePerms []models.RolePermission
 		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: role.ID, PermissionID: pid})
+			rolePerms = append(rolePerms, models.RolePermission{RoleID: role.ID, PermissionID: pid})
+		}
+		if err := s.db.CreateInBatches(rolePerms, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, role.ID)
@@ -220,12 +236,20 @@ func (s *RoleService) UpdateRole(ctx context.Context, id uint, req *UpdateRoleRe
 	}
 	role.Name = req.Name
 	role.Description = req.Description
-	s.db.Save(role)
+	if err := s.db.Save(role).Error; err != nil {
+		return nil, err
+	}
 
 	if len(req.PermissionIDs) > 0 {
-		s.db.Where("role_id = ?", id).Delete(&models.RolePermission{})
+		if err := s.db.Where("role_id = ?", id).Delete(&models.RolePermission{}).Error; err != nil {
+			return nil, err
+		}
+		var rolePerms []models.RolePermission
 		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: id, PermissionID: pid})
+			rolePerms = append(rolePerms, models.RolePermission{RoleID: id, PermissionID: pid})
+		}
+		if err := s.db.CreateInBatches(rolePerms, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, id)

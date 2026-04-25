@@ -15,11 +15,22 @@ import (
 	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
+func setupTestDB(t testing.TB) *gorm.DB {
+	if t != nil {
+		t.Helper()
+	}
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(models.AllModels()...))
+	if t != nil {
+		require.NoError(t, err)
+		require.NoError(t, db.AutoMigrate(models.AllModels()...))
+	} else {
+		if err != nil {
+			panic(err)
+		}
+		if err := db.AutoMigrate(models.AllModels()...); err != nil {
+			panic(err)
+		}
+	}
 	return db
 }
 
