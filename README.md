@@ -1,0 +1,192 @@
+# Dynamic CMS & API Builder - Backend Platform
+
+Welcome to the Dynamic CMS & API Builder Backend Platform! This project is a self-hosted, Go-native Backend-as-a-Service (BaaS) platform that works similarly to Hasura or Supabase. It allows developers to dynamically create backend services, schemas, APIs, and optional GraphQL endpoints on the fly.
+
+The system is highly modular, scalable, cloud-ready, and built using industry best practices like Clean Architecture and Domain-Driven Design (DDD).
+
+---
+
+## 1. System Architecture Explanation
+
+The CMS Backend follows **Clean Architecture** and **Domain-Driven Design (DDD)**. The system is split into multiple distinct layers:
+
+- **Presentation Layer**: The API layer mapping incoming requests to internal services. Handled by the Gin HTTP framework (in `internal/handlers/`) which also acts as an API gateway. It also includes an optional GraphQL gateway via `gqlgen`.
+- **Application Layer**: Contains business logic (`internal/services/`). The services control data access, generate dynamic schemas, and orchestrate actions like schema migrations or query parsing.
+- **Domain Layer**: The data models (`internal/models/`). It defines the platform's core entities, such as `Service`, `Field`, `DatabaseConnection`, `User`, `Role`.
+- **Infrastructure Layer**: Cross-cutting tools including database connection caching, telemetry (`internal/tracing/`), metrics collection (Prometheus), and logging (`pkg/logger/`).
+
+### High-Level Components Map
+
+```text
+       Client Applications
+                │
+   ┌────────────┴─────────────┐
+   ▼                          ▼
+REST API                 GraphQL API
+   │                          │
+   └────────────┬─────────────┘
+                ▼
+           API Gateway
+                │
+                ▼
+      Backend Platform Core
+   ┌──────────────────────────┐
+   │ ─ CMS Control Plane      │
+   │ ─ Service Builder        │
+   │ ─ CRUD Engine            │
+   │ ─ Query Engine           │
+   │ ─ Schema Migration Engine│
+   │ ─ Backup Engine          │
+   │ ─ Observability Engine   │
+   └────────────┬─────────────┘
+                ▼
+       Database Connectors
+   ┌────────────┼─────────────┐
+   ▼            ▼             ▼
+PostgreSQL    MySQL       MongoDB / SQLite
+```
+
+---
+
+## 2. Metadata Database Schema
+
+The core internal configuration of the platform is stored in a **Metadata Database** (often PostgreSQL in production, or SQLite/MySQL depending on configuration). Key components and tables include:
+
+1. **`database_connections`**: Stores external DB configurations with fields: `id`, `name`, `type`, `host`, `port`, `username`, `password`, `database_name`. It also includes connection pooling details.
+2. **`services`**: Represents the user-created data models. Includes `id`, `name`, `database_connection_id`, `created_at`, `updated_at`, and maps to the underlying table (`db_table_name`).
+3. **`fields`**: Defines attributes for each service, such as string, integer, float, uuid, JSON. Configures `name`, `type`, `nullable`, `unique`, `default_value`, `index`.
+4. **`relations`**: (Conceptual and DB level) Supports relationships between services (One-to-One, One-to-Many, Many-to-One, Many-to-Many).
+5. **`migrations`**: Keeps track of schema changes (DDL executions) and tracks statuses for safe schema changes.
+6. **`backups`**: Stores backup snapshots.
+7. **`users` & `roles`**: Handles general authentication, JWT tokens, and RBAC (Role-Based Access Control) for platform security.
+
+---
+
+## 3. Go Project Structure
+
+The project implements a clean modular structure to ensure maintainability:
+
+```
+.
+├── cmd/
+│   └── server/                # Main entry point for the application
+├── internal/
+│   ├── config/                # Environment and app configuration
+│   ├── database/              # Database connection manager and pooling
+│   ├── graphql/               # GraphQL gateway implementation
+│   ├── handlers/              # Gin HTTP handlers (REST API layer)
+│   ├── middleware/            # Auth, rate limiting, and metrics middleware
+│   ├── models/                # Core domain models
+│   ├── services/              # Business logic (CRUD, Migrations, etc.)
+│   └── tracing/               # OpenTelemetry initialization
+├── pkg/
+│   ├── logger/                # Zap structured logging setup
+│   └── response/              # Standardized HTTP response helpers
+├── tests/
+│   ├── unit/                  # Isolated unit tests
+│   ├── integration/           # Database/component integration tests
+│   └── uat/                   # User Acceptance Testing
+├── docker/                    # Docker configuration files
+├── Makefile                   # Build, run, and test targets
+├── go.mod                     # Go modules
+└── README.md                  # This file
+```
+
+---
+
+## 4. CRUD Engine Implementation
+
+When a user defines a service via the Service Builder, the system automatically exposes powerful REST CRUD endpoints dynamically generated by the **CRUD Engine** (`internal/services/dynamic_data_service.go`).
+
+Operations generated automatically:
+- **Create**: `POST /api/v1/data/{service_name}`
+- **Read**: `GET /api/v1/data/{service_name}/{id}`
+- **Update**: `PUT /api/v1/data/{service_name}/{id}`
+- **Delete**: `DELETE /api/v1/data/{service_name}/{id}`
+- **List**: `GET /api/v1/data/{service_name}`
+
+The List endpoint is powered by an advanced **Query Engine** supporting:
+- Filtering: `GET /api/v1/data/users?email=john@example.com`
+- Sorting: `GET /api/v1/data/users?sort=created_at:desc`
+- Pagination: `GET /api/v1/data/users?page=1&limit=20`
+- Joining (via dynamic relations).
+
+---
+
+## 5. Schema Migration Engine
+
+The platform relies on a **Schema Migration Engine** (`internal/services/migration_service.go`) to handle structural database changes safely.
+
+Using GORM’s Migrator capabilities, it supports:
+- Adding, Dropping, and Renaming columns.
+- Changing column types.
+- Safely handling changes directly generated via updates to Service objects.
+- It logs migration events locally in the `migrations` table to provide an audit trail of schema adjustments.
+
+---
+
+## 6. GraphQL Gateway
+
+The platform auto-generates a highly capable **GraphQL API** built on `gqlgen` (`internal/graphql/gateway.go`).
+
+When services and fields are created, the gateway serves requests automatically against the GraphQL endpoint (`POST /api/v1/graphql`). This enables front-end applications to query precisely the data structures they need without relying solely on REST endpoints, utilizing a powerful generic GraphQL schema mapped to the platform's metadata definitions.
+
+---
+
+## 7. Backup System
+
+To protect data and schemas, the **Backup Engine** (`internal/services/backup_service.go`) provides data persistence layers.
+- Snapshots: Supports capturing data records inside dynamic tables and saving them in JSON formats.
+- Restores: Supports re-importing JSON-formatted payload records for seamless disaster recovery or data duplication.
+
+---
+
+## 8. Observability Integration
+
+Observability is a first-class citizen in this system, crucial for production readiness:
+- **Logging**: Implemented with **Uber's Zap** (`pkg/logger/`) for highly performant, structured JSON logging. Request IDs and correlation IDs are attached automatically to contexts.
+- **Metrics**: Uses **Prometheus** (`internal/middleware/prometheus.go`). Endpoints are automatically exposed on `/metrics` to track latency, request counts, and HTTP error rates.
+- **Tracing**: Powered by **OpenTelemetry (OTel)** (`internal/tracing/`). Tracing hooks map API request boundaries, tracking downstream service duration and external SQL query delays, which can be exported to tools like Jaeger.
+
+---
+
+## 9. Unit Tests
+
+Testing guarantees stability across the platform. The project maintains a strict >80% test coverage expectation across Repository, Service, and API handler layers.
+
+**To run tests:**
+```bash
+make test-coverage
+# Alternatively: go test -v -race -coverprofile=coverage.out -coverpkg=./... ./tests/...
+```
+
+Tests use an in-memory SQLite database setup (`:memory:`) ensuring fast, isolated runs. We utilize Go's built-in `testing` library along with Gin's `httptest` utilities.
+
+---
+
+## 10. Docker Setup
+
+The platform is containerized for seamless cloud deployment. A complete `Dockerfile` and `docker-compose.yml` stack are provided, mapping out everything necessary.
+
+**Running via Docker:**
+```bash
+docker-compose up --build
+```
+
+The stack typically includes:
+- The Backend CMS Go binary.
+- Prometheus configuration.
+- Internal networking mapped out for related infrastructure (e.g. Jaeger, database).
+
+---
+
+## 11. Swagger Documentation
+
+API documentation is generated dynamically and statically utilizing **Swagger / OpenAPI**.
+
+- Ensure the tool is installed: `go install github.com/swaggo/swag/cmd/swag@latest`
+- Generate docs: `swag init -g cmd/server/main.go --parseDependency --parseInternal --output docs`
+- The result builds JSON/YAML representations mapping handlers to precise input/output payloads, accessible through standard Swagger UI tooling if exposed over a handler route.
+
+---
+*Developed with Go & Clean Architecture for the modern Backend-as-a-Service ecosystem.*
