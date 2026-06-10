@@ -38,3 +38,7 @@ docs/
 # Temporary files
 tmp/
 *.tmp
+
+cms_backend.db
+*.log
+tree.txt
