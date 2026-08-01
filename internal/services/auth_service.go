@@ -87,7 +87,9 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	// Assign default viewer role
 	var viewerRole models.Role
 	if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-		s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+		if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	user.Password = ""
@@ -115,7 +117,9 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*TokenPair,
 	}
 
 	now := time.Now()
-	s.db.Model(&user).Update("last_login_at", now)
+	if err := s.db.Model(&user).Update("last_login_at", now).Error; err != nil {
+		return nil, nil, err
+	}
 	user.Password = ""
 	return tokens, &user, nil
 }
@@ -128,7 +132,9 @@ func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	}
 
 	// Revoke old token
-	s.db.Model(&stored).Update("is_revoked", true)
+	if err := s.db.Model(&stored).Update("is_revoked", true).Error; err != nil {
+		return nil, err
+	}
 
 	return s.generateTokenPair(ctx, stored.User)
 }
@@ -181,11 +187,13 @@ func (s *AuthService) generateTokenPair(ctx context.Context, user *models.User) 
 	// Create refresh token
 	refreshTokenStr := uuid.New().String() + uuid.New().String()
 	refreshExpiry := time.Now().Add(s.cfg.RefreshTokenExpire)
-	s.db.Create(&models.RefreshToken{
+	if err := s.db.Create(&models.RefreshToken{
 		UserID:    user.ID,
 		Token:     refreshTokenStr,
 		ExpiresAt: refreshExpiry,
-	})
+	}).Error; err != nil {
+		return nil, err
+	}
 
 	return &TokenPair{
 		AccessToken:  accessToken,

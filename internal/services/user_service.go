@@ -73,13 +73,19 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 	}
 
 	if len(req.RoleIDs) > 0 {
+		var userRoles []models.UserRole
 		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: roleID})
+			userRoles = append(userRoles, models.UserRole{UserID: user.ID, RoleID: roleID})
+		}
+		if err := s.db.CreateInBatches(userRoles, 100).Error; err != nil {
+			return nil, err
 		}
 	} else {
 		var viewerRole models.Role
 		if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+			if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -127,16 +133,28 @@ func (s *UserService) UpdateUser(ctx context.Context, id uint, req *UpdateUserRe
 	user.Avatar = req.Avatar
 	user.IsActive = req.IsActive
 
-	if err := s.db.Save(user).Error; err != nil {
-		return nil, err
-	}
-
-	// Update roles
-	if len(req.RoleIDs) > 0 {
-		s.db.Where("user_id = ?", id).Delete(&models.UserRole{})
-		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: id, RoleID: roleID})
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
 		}
+
+		// Update roles
+		if len(req.RoleIDs) > 0 {
+			if err := tx.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+				return err
+			}
+			var userRoles []models.UserRole
+			for _, roleID := range req.RoleIDs {
+				userRoles = append(userRoles, models.UserRole{UserID: id, RoleID: roleID})
+			}
+			if err := tx.CreateInBatches(userRoles, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetUser(ctx, id)
@@ -186,13 +204,23 @@ func (s *RoleService) CreateRole(ctx context.Context, req *CreateRoleRequest) (*
 		return nil, fmt.Errorf("role '%s' already exists", req.Name)
 	}
 	role := &models.Role{Name: req.Name, Description: req.Description, IsActive: true}
-	if err := s.db.Create(role).Error; err != nil {
-		return nil, err
-	}
-	if len(req.PermissionIDs) > 0 {
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: role.ID, PermissionID: pid})
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(role).Error; err != nil {
+			return err
 		}
+		if len(req.PermissionIDs) > 0 {
+			var rolePerms []models.RolePermission
+			for _, pid := range req.PermissionIDs {
+				rolePerms = append(rolePerms, models.RolePermission{RoleID: role.ID, PermissionID: pid})
+			}
+			if err := tx.CreateInBatches(rolePerms, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return s.GetRole(ctx, role.ID)
 }
@@ -220,13 +248,27 @@ func (s *RoleService) UpdateRole(ctx context.Context, id uint, req *UpdateRoleRe
 	}
 	role.Name = req.Name
 	role.Description = req.Description
-	s.db.Save(role)
-
-	if len(req.PermissionIDs) > 0 {
-		s.db.Where("role_id = ?", id).Delete(&models.RolePermission{})
-		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: id, PermissionID: pid})
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(role).Error; err != nil {
+			return err
 		}
+
+		if len(req.PermissionIDs) > 0 {
+			if err := tx.Where("role_id = ?", id).Delete(&models.RolePermission{}).Error; err != nil {
+				return err
+			}
+			var rolePerms []models.RolePermission
+			for _, pid := range req.PermissionIDs {
+				rolePerms = append(rolePerms, models.RolePermission{RoleID: id, PermissionID: pid})
+			}
+			if err := tx.CreateInBatches(rolePerms, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return s.GetRole(ctx, id)
 }
@@ -237,7 +279,9 @@ func (s *RoleService) DeleteRole(ctx context.Context, id uint) error {
 
 func (s *RoleService) ListPermissions(ctx context.Context) ([]models.Permission, error) {
 	var perms []models.Permission
-	s.db.WithContext(ctx).Find(&perms)
+	if err := s.db.WithContext(ctx).Find(&perms).Error; err != nil {
+		return nil, err
+	}
 	return perms, nil
 }
 
@@ -328,7 +372,9 @@ func (s *DBConnService) Get(ctx context.Context, id uint) (*models.DatabaseConne
 
 func (s *DBConnService) List(ctx context.Context) ([]models.DatabaseConnection, error) {
 	var conns []models.DatabaseConnection
-	s.db.WithContext(ctx).Find(&conns)
+	if err := s.db.WithContext(ctx).Find(&conns).Error; err != nil {
+		return nil, err
+	}
 	for i := range conns {
 		conns[i].Password = ""
 	}
@@ -380,7 +426,9 @@ func (s *ValidationService) List(ctx context.Context, serviceID *uint) ([]models
 		q = q.Where("OR service_id = ?", *serviceID)
 	}
 	q = q.Where(")")
-	q.Find(&validations)
+	if err := q.Find(&validations).Error; err != nil {
+		return nil, err
+	}
 	return validations, nil
 }
 
