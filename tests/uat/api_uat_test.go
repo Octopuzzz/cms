@@ -108,7 +108,7 @@ func loginAsAdmin(t *testing.T, router *gin.Engine) string {
 	t.Helper()
 
 	// First register an admin
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"username": "admin",
 		"email":    "admin@test.com",
 		"password": "admin_password_123",
@@ -119,7 +119,7 @@ func loginAsAdmin(t *testing.T, router *gin.Engine) string {
 	router.ServeHTTP(w, req)
 
 	// Login
-	body, _ = json.Marshal(map[string]interface{}{
+	body, _ = json.Marshal(map[string]any{
 		"username": "admin",
 		"password": "admin_password_123",
 	})
@@ -129,9 +129,9 @@ func loginAsAdmin(t *testing.T, router *gin.Engine) string {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	data, _ := resp["data"].(map[string]interface{})
+	data, _ := resp["data"].(map[string]any)
 	return fmt.Sprintf("%v", data["access_token"])
 }
 
@@ -140,7 +140,7 @@ func TestUAT_AuthFlow(t *testing.T) {
 	router := setupTestServer(t)
 
 	// Register
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"username": "uatuser",
 		"email":    "uat@example.com",
 		"password": "uatpassword123",
@@ -152,7 +152,7 @@ func TestUAT_AuthFlow(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	// Login
-	body, _ = json.Marshal(map[string]interface{}{
+	body, _ = json.Marshal(map[string]any{
 		"username": "uatuser",
 		"password": "uatpassword123",
 	})
@@ -162,9 +162,9 @@ func TestUAT_AuthFlow(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var loginResp map[string]interface{}
+	var loginResp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &loginResp)
-	data, _ := loginResp["data"].(map[string]interface{})
+	data, _ := loginResp["data"].(map[string]any)
 	token := fmt.Sprintf("%v", data["access_token"])
 	assert.NotEmpty(t, token)
 
@@ -182,18 +182,18 @@ func TestUAT_ServiceLifecycle(t *testing.T) {
 	token := loginAsAdmin(t, router)
 
 	// Create service
-	serviceData := map[string]interface{}{
+	serviceData := map[string]any{
 		"name":        "UAT Products",
 		"description": "Products for UAT testing",
-		"fields": []interface{}{
-			map[string]interface{}{
+		"fields": []any{
+			map[string]any{
 				"name": "name", "label": "Name", "type": "string", "is_required": true,
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name": "price", "label": "Price", "type": "float",
 			},
 		},
-		"menu_config": map[string]interface{}{
+		"menu_config": map[string]any{
 			"icon": "shopping-cart", "sort_order": 1, "is_visible": true,
 		},
 	}
@@ -206,9 +206,9 @@ func TestUAT_ServiceLifecycle(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusCreated, w.Code)
 
-	var createResp map[string]interface{}
+	var createResp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &createResp)
-	svcData, _ := createResp["data"].(map[string]interface{})
+	svcData, _ := createResp["data"].(map[string]any)
 	slug, _ := svcData["slug"].(string)
 	assert.NotEmpty(t, slug)
 

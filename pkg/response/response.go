@@ -9,11 +9,11 @@ import (
 
 // Response is the standard API response envelope
 type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Meta    *Meta       `json:"meta,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Data    any    `json:"data,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Meta    *Meta  `json:"meta,omitempty"`
 }
 
 // Meta holds pagination information
@@ -31,22 +31,22 @@ type ValidationError struct {
 }
 
 // OK sends a 200 response
-func OK(c *gin.Context, data interface{}) {
+func OK(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, Response{Success: true, Data: data})
 }
 
 // OKMessage sends a 200 response with a message
-func OKMessage(c *gin.Context, message string, data interface{}) {
+func OKMessage(c *gin.Context, message string, data any) {
 	c.JSON(http.StatusOK, Response{Success: true, Message: message, Data: data})
 }
 
 // Created sends a 201 response
-func Created(c *gin.Context, data interface{}) {
+func Created(c *gin.Context, data any) {
 	c.JSON(http.StatusCreated, Response{Success: true, Data: data})
 }
 
 // Paginated sends a paginated 200 response
-func Paginated(c *gin.Context, data interface{}, total int64, page, pageSize int) {
+func Paginated(c *gin.Context, data any, total int64, page, pageSize int) {
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize != 0 {
 		totalPages++

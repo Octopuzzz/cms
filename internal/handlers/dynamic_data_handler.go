@@ -140,7 +140,7 @@ func (h *DynamicDataHandler) CreateData(c *gin.Context) {
 		return
 	}
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -214,7 +214,7 @@ func (h *DynamicDataHandler) UpdateData(c *gin.Context) {
 		return
 	}
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.BadRequest(c, err.Error())
 		return
