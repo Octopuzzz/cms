@@ -27,13 +27,13 @@ const (
 
 // Logger is the application logger interface
 type Logger interface {
-	Debug(msg string, fields ...interface{})
-	Info(msg string, fields ...interface{})
-	Warn(msg string, fields ...interface{})
-	Error(msg string, fields ...interface{})
-	Fatal(msg string, fields ...interface{})
+	Debug(msg string, fields ...any)
+	Info(msg string, fields ...any)
+	Warn(msg string, fields ...any)
+	Error(msg string, fields ...any)
+	Fatal(msg string, fields ...any)
 	WithContext(ctx context.Context) Logger
-	WithFields(fields map[string]interface{}) Logger
+	WithFields(fields map[string]any) Logger
 	GetWriter() io.Writer
 }
 
@@ -93,7 +93,7 @@ func InitLogger(level string, format string) {
 	instance = &logrusLogger{logger: log, fields: make(logrus.Fields)}
 }
 
-func (l *logrusLogger) Debug(msg string, fields ...interface{}) {
+func (l *logrusLogger) Debug(msg string, fields ...any) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	entry := l.logger.WithFields(l.fields)
@@ -103,7 +103,7 @@ func (l *logrusLogger) Debug(msg string, fields ...interface{}) {
 	entry.Debug(msg)
 }
 
-func (l *logrusLogger) Info(msg string, fields ...interface{}) {
+func (l *logrusLogger) Info(msg string, fields ...any) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	entry := l.logger.WithFields(l.fields)
@@ -113,7 +113,7 @@ func (l *logrusLogger) Info(msg string, fields ...interface{}) {
 	entry.Info(msg)
 }
 
-func (l *logrusLogger) Warn(msg string, fields ...interface{}) {
+func (l *logrusLogger) Warn(msg string, fields ...any) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	entry := l.logger.WithFields(l.fields)
@@ -123,7 +123,7 @@ func (l *logrusLogger) Warn(msg string, fields ...interface{}) {
 	entry.Warn(msg)
 }
 
-func (l *logrusLogger) Error(msg string, fields ...interface{}) {
+func (l *logrusLogger) Error(msg string, fields ...any) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	entry := l.logger.WithFields(l.fields)
@@ -133,7 +133,7 @@ func (l *logrusLogger) Error(msg string, fields ...interface{}) {
 	entry.Error(msg)
 }
 
-func (l *logrusLogger) Fatal(msg string, fields ...interface{}) {
+func (l *logrusLogger) Fatal(msg string, fields ...any) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	entry := l.logger.WithFields(l.fields)
@@ -166,7 +166,7 @@ func (l *logrusLogger) WithContext(ctx context.Context) Logger {
 	return &logrusLogger{logger: l.logger, fields: newFields}
 }
 
-func (l *logrusLogger) WithFields(fields map[string]interface{}) Logger {
+func (l *logrusLogger) WithFields(fields map[string]any) Logger {
 	newFields := make(logrus.Fields)
 	for k, v := range l.fields {
 		newFields[k] = v
@@ -181,7 +181,7 @@ func (l *logrusLogger) GetWriter() io.Writer {
 	return l.logger.Out
 }
 
-func kvToFields(kv ...interface{}) logrus.Fields {
+func kvToFields(kv ...any) logrus.Fields {
 	fields := make(logrus.Fields)
 	for i := 0; i+1 < len(kv); i += 2 {
 		if k, ok := kv[i].(string); ok {
@@ -269,7 +269,7 @@ func GinMiddleware() gin.HandlerFunc {
 
 		duration := time.Since(start)
 		log := GetLogger().WithContext(ctx)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"method":    c.Request.Method,
 			"path":      c.Request.URL.Path,
 			"status":    c.Writer.Status(),
@@ -286,8 +286,8 @@ func GinMiddleware() gin.HandlerFunc {
 	}
 }
 
-func toKV(m map[string]interface{}) []interface{} {
-	out := make([]interface{}, 0, len(m)*2)
+func toKV(m map[string]any) []any {
+	out := make([]any, 0, len(m)*2)
 	for k, v := range m {
 		out = append(out, k, v)
 	}
