@@ -293,7 +293,7 @@ func (s *ServiceService) UpdateService(ctx context.Context, id uint, req *Update
 		}
 		if f.ID != nil {
 			// Update existing field
-			conn.DB.Model(&models.Field{}).Where("id = ?", *f.ID).Updates(map[string]interface{}{
+			conn.DB.Model(&models.Field{}).Where("id = ?", *f.ID).Updates(map[string]any{
 				"name": f.Name, "label": f.Label, "type": string(f.Type),
 				"is_required": f.IsRequired, "updated_by": userID,
 			})
@@ -314,7 +314,7 @@ func (s *ServiceService) UpdateService(ctx context.Context, id uint, req *Update
 
 	// Update menu
 	if req.MenuConfig != nil {
-		conn.DB.Model(&models.Menu{}).Where("service_id = ?", id).Updates(map[string]interface{}{
+		conn.DB.Model(&models.Menu{}).Where("service_id = ?", id).Updates(map[string]any{
 			"icon": req.MenuConfig.Icon, "sort_order": req.MenuConfig.SortOrder, "is_visible": req.MenuConfig.IsVisible,
 		})
 	}
