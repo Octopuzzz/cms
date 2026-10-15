@@ -57,7 +57,7 @@ func (s *DynamicExecutableSchema) Schema() *ast.Schema {
 	return schema
 }
 
-func (s *DynamicExecutableSchema) Complexity(ctx context.Context, typeName, field string, childComplexity int, args map[string]interface{}) (int, bool) {
+func (s *DynamicExecutableSchema) Complexity(ctx context.Context, typeName, field string, childComplexity int, args map[string]any) (int, bool) {
 	return 1, false
 }
 
