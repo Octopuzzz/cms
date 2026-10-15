@@ -388,6 +388,6 @@ type gormWriterAdapter struct {
 	log logger.Logger
 }
 
-func (g *gormWriterAdapter) Printf(format string, args ...interface{}) {
+func (g *gormWriterAdapter) Printf(format string, args ...any) {
 	g.log.Info(fmt.Sprintf(format, args...))
 }
