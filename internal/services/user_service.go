@@ -247,7 +247,7 @@ func (s *RoleService) ListPermissions(ctx context.Context) ([]models.Permission,
 type DBConnectionService struct {
 	db          *gorm.DB
 	connManager interface {
-		CreateConnection(ctx context.Context, dbConn *models.DatabaseConnection, password string) (interface{}, error)
+		CreateConnection(ctx context.Context, dbConn *models.DatabaseConnection, password string) (any, error)
 	}
 }
 
@@ -260,22 +260,22 @@ func NewDBConnService(db *gorm.DB) *DBConnService {
 }
 
 type CreateDBConnectionRequest struct {
-	Name            string                 `json:"name" binding:"required,min=2,max=100"`
-	Type            string                 `json:"type" binding:"required,oneof=postgresql mysql sqlite sqlserver"`
-	Host            string                 `json:"host"`
-	Port            int                    `json:"port"`
-	Username        string                 `json:"username"`
-	Password        string                 `json:"password"`
-	Database        string                 `json:"database" binding:"required"`
-	Schema          string                 `json:"schema"`
-	SSLMode         string                 `json:"ssl_mode"`
-	CustomURL       string                 `json:"custom_url"`
-	IsDefault       bool                   `json:"is_default"`
-	MaxOpenConns    int                    `json:"max_open_conns"`
-	MaxIdleConns    int                    `json:"max_idle_conns"`
-	ConnMaxLifetime int                    `json:"conn_max_lifetime_seconds"`
-	ConnMaxIdleTime int                    `json:"conn_max_idle_time_seconds"`
-	Metadata        map[string]interface{} `json:"metadata"`
+	Name            string         `json:"name" binding:"required,min=2,max=100"`
+	Type            string         `json:"type" binding:"required,oneof=postgresql mysql sqlite sqlserver"`
+	Host            string         `json:"host"`
+	Port            int            `json:"port"`
+	Username        string         `json:"username"`
+	Password        string         `json:"password"`
+	Database        string         `json:"database" binding:"required"`
+	Schema          string         `json:"schema"`
+	SSLMode         string         `json:"ssl_mode"`
+	CustomURL       string         `json:"custom_url"`
+	IsDefault       bool           `json:"is_default"`
+	MaxOpenConns    int            `json:"max_open_conns"`
+	MaxIdleConns    int            `json:"max_idle_conns"`
+	ConnMaxLifetime int            `json:"conn_max_lifetime_seconds"`
+	ConnMaxIdleTime int            `json:"conn_max_idle_time_seconds"`
+	Metadata        map[string]any `json:"metadata"`
 }
 
 func (s *DBConnService) Create(ctx context.Context, req *CreateDBConnectionRequest, userID uint) (*models.DatabaseConnection, error) {

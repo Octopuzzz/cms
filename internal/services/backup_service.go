@@ -24,12 +24,12 @@ func NewBackupService(cm *database.ConnectionManager) *BackupService {
 
 // BackupResult contains the result of a backup operation
 type BackupResult struct {
-	BackupID  uint                   `json:"backup_id"`
-	ServiceID uint                   `json:"service_id"`
-	Type      string                 `json:"type"`
-	Schema    map[string]interface{} `json:"schema,omitempty"`
-	Data      []map[string]interface{} `json:"data,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
+	BackupID  uint             `json:"backup_id"`
+	ServiceID uint             `json:"service_id"`
+	Type      string           `json:"type"`
+	Schema    map[string]any   `json:"schema,omitempty"`
+	Data      []map[string]any `json:"data,omitempty"`
+	CreatedAt time.Time        `json:"created_at"`
 }
 
 // CreateBackup creates a full snapshot backup of a service (schema + data)
@@ -57,11 +57,11 @@ func (s *BackupService) CreateBackup(ctx context.Context, serviceID uint, userID
 	schemaBytes, _ := json.Marshal(svc.Fields)
 
 	// Snapshot data
-	var rows []map[string]interface{}
+	var rows []map[string]any
 	if err := targetConn.DB.Table(svc.DbTableName).
 		Where("deleted_at IS NULL").
 		Find(&rows).Error; err != nil {
-		rows = []map[string]interface{}{}
+		rows = []map[string]any{}
 	}
 	dataBytes, _ := json.Marshal(rows)
 
@@ -142,7 +142,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID uint) error 
 	}
 
 	// Parse data
-	var rows []map[string]interface{}
+	var rows []map[string]any
 	if err := json.Unmarshal([]byte(backup.TableData), &rows); err != nil {
 		return fmt.Errorf("failed to parse backup data: %w", err)
 	}
