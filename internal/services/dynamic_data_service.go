@@ -30,12 +30,12 @@ type ListDataRequest struct {
 	SortBy    string
 	SortOrder string
 	Search    string
-	Filters   map[string]interface{}
+	Filters   map[string]any
 	Joins     []string // field names to join (relation fields)
 }
 
 // CreateData inserts a new record in the service's dynamic table
-func (s *DynamicDataService) CreateData(ctx context.Context, slug string, data map[string]interface{}, userID uint) (map[string]interface{}, error) {
+func (s *DynamicDataService) CreateData(ctx context.Context, slug string, data map[string]any, userID uint) (map[string]any, error) {
 	svc, db, err := s.resolveServiceDB(ctx, slug)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (s *DynamicDataService) CreateData(ctx context.Context, slug string, data m
 	data["updated_by"] = userID
 
 	cols := make([]string, 0)
-	vals := make([]interface{}, 0)
+	vals := make([]any, 0)
 	placeholders := make([]string, 0)
 
 	for k, v := range data {
@@ -73,7 +73,7 @@ func (s *DynamicDataService) CreateData(ctx context.Context, slug string, data m
 	}
 
 	// Get the inserted record
-	var row map[string]interface{}
+	var row map[string]any
 	db.WithContext(ctx).Raw(fmt.Sprintf("SELECT * FROM %s WHERE id = last_insert_rowid()", svc.DbTableName)).Scan(&row)
 	if row == nil {
 		// For non-SQLite, query by rowid
@@ -84,14 +84,14 @@ func (s *DynamicDataService) CreateData(ctx context.Context, slug string, data m
 }
 
 // GetData retrieves a single record
-func (s *DynamicDataService) GetData(ctx context.Context, slug string, id uint, joins []string) (map[string]interface{}, error) {
+func (s *DynamicDataService) GetData(ctx context.Context, slug string, id uint, joins []string) (map[string]any, error) {
 	svc, db, err := s.resolveServiceDB(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
 
 	query := fmt.Sprintf("SELECT * FROM %s WHERE id = ? AND deleted_at IS NULL", svc.DbTableName)
-	var row map[string]interface{}
+	var row map[string]any
 	if err := db.WithContext(ctx).Raw(query, id).Scan(&row).Error; err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (s *DynamicDataService) GetData(ctx context.Context, slug string, id uint, 
 }
 
 // ListData returns paginated records with optional joins and filters
-func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *ListDataRequest) ([]map[string]interface{}, int64, error) {
+func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *ListDataRequest) ([]map[string]any, int64, error) {
 	svc, db, err := s.resolveServiceDB(ctx, slug)
 	if err != nil {
 		return nil, 0, err
@@ -136,7 +136,7 @@ func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *Lis
 	query := fmt.Sprintf("SELECT * FROM %s WHERE deleted_at IS NULL ORDER BY %s %s LIMIT ? OFFSET ?",
 		svc.DbTableName, sortBy, sortOrder)
 
-	var rows []map[string]interface{}
+	var rows []map[string]any
 	if err := db.WithContext(ctx).Raw(query, req.PageSize, offset).Scan(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -152,7 +152,7 @@ func (s *DynamicDataService) ListData(ctx context.Context, slug string, req *Lis
 }
 
 // UpdateData updates a record in the dynamic table
-func (s *DynamicDataService) UpdateData(ctx context.Context, slug string, id uint, data map[string]interface{}, userID uint) (map[string]interface{}, error) {
+func (s *DynamicDataService) UpdateData(ctx context.Context, slug string, id uint, data map[string]any, userID uint) (map[string]any, error) {
 	svc, db, err := s.resolveServiceDB(ctx, slug)
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (s *DynamicDataService) UpdateData(ctx context.Context, slug string, id uin
 	data["updated_by"] = userID
 
 	setClauses := make([]string, 0)
-	vals := make([]interface{}, 0)
+	vals := make([]any, 0)
 	for k, v := range data {
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", k))
 		vals = append(vals, v)
@@ -207,7 +207,7 @@ func (s *DynamicDataService) resolveServiceDB(ctx context.Context, slug string) 
 }
 
 // validateData validates incoming data against field definitions
-func (s *DynamicDataService) validateData(_ context.Context, svc *models.Service, data map[string]interface{}) error {
+func (s *DynamicDataService) validateData(_ context.Context, svc *models.Service, data map[string]any) error {
 	var validationErrors []string
 	for _, field := range svc.Fields {
 		val, exists := data[field.Name]
@@ -259,7 +259,7 @@ func (s *DynamicDataService) validateData(_ context.Context, svc *models.Service
 }
 
 // applyJoins enriches records with related data
-func (s *DynamicDataService) applyJoins(ctx context.Context, db *gorm.DB, svc *models.Service, row map[string]interface{}, joinFields []string) (map[string]interface{}, error) {
+func (s *DynamicDataService) applyJoins(ctx context.Context, db *gorm.DB, svc *models.Service, row map[string]any, joinFields []string) (map[string]any, error) {
 	joinSet := make(map[string]bool)
 	for _, j := range joinFields {
 		joinSet[j] = true
@@ -284,7 +284,7 @@ func (s *DynamicDataService) applyJoins(ctx context.Context, db *gorm.DB, svc *m
 			continue
 		}
 
-		var relatedRow map[string]interface{}
+		var relatedRow map[string]any
 		db.WithContext(ctx).Raw(
 			fmt.Sprintf("SELECT * FROM %s WHERE %s = ? AND deleted_at IS NULL LIMIT 1",
 				relatedSvc.DbTableName, field.RelationConfig.RelatedField),
@@ -303,7 +303,7 @@ func isEmail(s string) bool {
 	return strings.Contains(s, "@") && strings.Contains(s, ".")
 }
 
-func toFloat(v interface{}) (float64, bool) {
+func toFloat(v any) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
 		return val, true

@@ -38,8 +38,8 @@ func NewMigrationService(cm *database.ConnectionManager) *MigrationService {
 
 // MigrationRequest describes a schema migration to apply
 type MigrationRequest struct {
-	ServiceID   uint   `json:"service_id" binding:"required"`
-	Description string `json:"description" binding:"required"`
+	ServiceID   uint                 `json:"service_id" binding:"required"`
+	Description string               `json:"description" binding:"required"`
 	Operations  []MigrationOperation `json:"operations" binding:"required,min=1"`
 }
 
@@ -70,11 +70,11 @@ func (s *MigrationService) CreateMigration(ctx context.Context, req *MigrationRe
 	schemaSnapshot, _ := json.Marshal(svc.Fields)
 
 	migration := &models.Migration{
-		ServiceID:   req.ServiceID,
-		Description: req.Description,
-		Status:      "pending",
+		ServiceID:      req.ServiceID,
+		Description:    req.Description,
+		Status:         "pending",
 		SchemaSnapshot: string(schemaSnapshot),
-		BaseModel:   models.BaseModel{CreatedBy: userID, UpdatedBy: userID},
+		BaseModel:      models.BaseModel{CreatedBy: userID, UpdatedBy: userID},
 	}
 
 	if err := conn.DB.WithContext(ctx).Create(migration).Error; err != nil {
