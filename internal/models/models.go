@@ -222,7 +222,7 @@ type Field struct {
 
 func (Field) TableName() string { return "fields" }
 
-type FieldOptions map[string]interface{}
+type FieldOptions map[string]any
 
 func (fo FieldOptions) Value() (driver.Value, error) {
 	if fo == nil {
@@ -232,7 +232,7 @@ func (fo FieldOptions) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (fo *FieldOptions) Scan(value interface{}) error {
+func (fo *FieldOptions) Scan(value any) error {
 	if value == nil {
 		*fo = nil
 		return nil
@@ -253,10 +253,10 @@ func (fo *FieldOptions) Scan(value interface{}) error {
 type FieldValidations []FieldValidationItem
 
 type FieldValidationItem struct {
-	Type       string      `json:"type"`
-	Value      interface{} `json:"value,omitempty"`
-	Message    string      `json:"message,omitempty"`
-	CustomRule *uint       `json:"custom_rule,omitempty"`
+	Type       string `json:"type"`
+	Value      any    `json:"value,omitempty"`
+	Message    string `json:"message,omitempty"`
+	CustomRule *uint  `json:"custom_rule,omitempty"`
 }
 
 func (fv FieldValidations) Value() (driver.Value, error) {
@@ -267,7 +267,7 @@ func (fv FieldValidations) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (fv *FieldValidations) Scan(value interface{}) error {
+func (fv *FieldValidations) Scan(value any) error {
 	if value == nil {
 		*fv = nil
 		return nil
@@ -302,7 +302,7 @@ func (rc *RelationConfig) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (rc *RelationConfig) Scan(value interface{}) error {
+func (rc *RelationConfig) Scan(value any) error {
 	if value == nil {
 		return nil
 	}
@@ -351,7 +351,7 @@ func (fp FieldPermissions) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (fp *FieldPermissions) Scan(value interface{}) error {
+func (fp *FieldPermissions) Scan(value any) error {
 	if value == nil {
 		*fp = nil
 		return nil
@@ -453,7 +453,7 @@ func (APIToken) TableName() string { return "api_tokens" }
 
 // ==================== HELPER TYPES ====================
 
-type JSONMap map[string]interface{}
+type JSONMap map[string]any
 
 func (jm JSONMap) Value() (driver.Value, error) {
 	if jm == nil {
@@ -463,7 +463,7 @@ func (jm JSONMap) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (jm *JSONMap) Scan(value interface{}) error {
+func (jm *JSONMap) Scan(value any) error {
 	if value == nil {
 		*jm = nil
 		return nil
@@ -490,7 +490,7 @@ func (sa StringArray) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-func (sa *StringArray) Scan(value interface{}) error {
+func (sa *StringArray) Scan(value any) error {
 	if value == nil {
 		*sa = nil
 		return nil
@@ -508,8 +508,8 @@ func (sa *StringArray) Scan(value interface{}) error {
 }
 
 // AllModels returns all model types for auto-migration
-func AllModels() []interface{} {
-	return []interface{}{
+func AllModels() []any {
+	return []any{
 		&DatabaseConnection{},
 		&User{},
 		&RefreshToken{},

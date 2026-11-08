@@ -73,13 +73,19 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 	}
 
 	if len(req.RoleIDs) > 0 {
+		var userRoles []models.UserRole
 		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: roleID})
+			userRoles = append(userRoles, models.UserRole{UserID: user.ID, RoleID: roleID})
+		}
+		if err := s.db.CreateInBatches(userRoles, 100).Error; err != nil {
+			return nil, err
 		}
 	} else {
 		var viewerRole models.Role
 		if err := s.db.Where("name = ?", "viewer").First(&viewerRole).Error; err == nil {
-			s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID})
+			if err := s.db.Create(&models.UserRole{UserID: user.ID, RoleID: viewerRole.ID}).Error; err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -133,9 +139,15 @@ func (s *UserService) UpdateUser(ctx context.Context, id uint, req *UpdateUserRe
 
 	// Update roles
 	if len(req.RoleIDs) > 0 {
-		s.db.Where("user_id = ?", id).Delete(&models.UserRole{})
+		if err := s.db.Where("user_id = ?", id).Delete(&models.UserRole{}).Error; err != nil {
+			return nil, err
+		}
+		var userRoles []models.UserRole
 		for _, roleID := range req.RoleIDs {
-			s.db.Create(&models.UserRole{UserID: id, RoleID: roleID})
+			userRoles = append(userRoles, models.UserRole{UserID: id, RoleID: roleID})
+		}
+		if err := s.db.CreateInBatches(userRoles, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 
@@ -190,8 +202,12 @@ func (s *RoleService) CreateRole(ctx context.Context, req *CreateRoleRequest) (*
 		return nil, err
 	}
 	if len(req.PermissionIDs) > 0 {
+		var rolePerms []models.RolePermission
 		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: role.ID, PermissionID: pid})
+			rolePerms = append(rolePerms, models.RolePermission{RoleID: role.ID, PermissionID: pid})
+		}
+		if err := s.db.CreateInBatches(rolePerms, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, role.ID)
@@ -220,12 +236,20 @@ func (s *RoleService) UpdateRole(ctx context.Context, id uint, req *UpdateRoleRe
 	}
 	role.Name = req.Name
 	role.Description = req.Description
-	s.db.Save(role)
+	if err := s.db.Save(role).Error; err != nil {
+		return nil, err
+	}
 
 	if len(req.PermissionIDs) > 0 {
-		s.db.Where("role_id = ?", id).Delete(&models.RolePermission{})
+		if err := s.db.Where("role_id = ?", id).Delete(&models.RolePermission{}).Error; err != nil {
+			return nil, err
+		}
+		var rolePerms []models.RolePermission
 		for _, pid := range req.PermissionIDs {
-			s.db.Create(&models.RolePermission{RoleID: id, PermissionID: pid})
+			rolePerms = append(rolePerms, models.RolePermission{RoleID: id, PermissionID: pid})
+		}
+		if err := s.db.CreateInBatches(rolePerms, 100).Error; err != nil {
+			return nil, err
 		}
 	}
 	return s.GetRole(ctx, id)
@@ -247,7 +271,7 @@ func (s *RoleService) ListPermissions(ctx context.Context) ([]models.Permission,
 type DBConnectionService struct {
 	db          *gorm.DB
 	connManager interface {
-		CreateConnection(ctx context.Context, dbConn *models.DatabaseConnection, password string) (interface{}, error)
+		CreateConnection(ctx context.Context, dbConn *models.DatabaseConnection, password string) (any, error)
 	}
 }
 
@@ -260,22 +284,22 @@ func NewDBConnService(db *gorm.DB) *DBConnService {
 }
 
 type CreateDBConnectionRequest struct {
-	Name            string                 `json:"name" binding:"required,min=2,max=100"`
-	Type            string                 `json:"type" binding:"required,oneof=postgresql mysql sqlite sqlserver"`
-	Host            string                 `json:"host"`
-	Port            int                    `json:"port"`
-	Username        string                 `json:"username"`
-	Password        string                 `json:"password"`
-	Database        string                 `json:"database" binding:"required"`
-	Schema          string                 `json:"schema"`
-	SSLMode         string                 `json:"ssl_mode"`
-	CustomURL       string                 `json:"custom_url"`
-	IsDefault       bool                   `json:"is_default"`
-	MaxOpenConns    int                    `json:"max_open_conns"`
-	MaxIdleConns    int                    `json:"max_idle_conns"`
-	ConnMaxLifetime int                    `json:"conn_max_lifetime_seconds"`
-	ConnMaxIdleTime int                    `json:"conn_max_idle_time_seconds"`
-	Metadata        map[string]interface{} `json:"metadata"`
+	Name            string         `json:"name" binding:"required,min=2,max=100"`
+	Type            string         `json:"type" binding:"required,oneof=postgresql mysql sqlite sqlserver"`
+	Host            string         `json:"host"`
+	Port            int            `json:"port"`
+	Username        string         `json:"username"`
+	Password        string         `json:"password"`
+	Database        string         `json:"database" binding:"required"`
+	Schema          string         `json:"schema"`
+	SSLMode         string         `json:"ssl_mode"`
+	CustomURL       string         `json:"custom_url"`
+	IsDefault       bool           `json:"is_default"`
+	MaxOpenConns    int            `json:"max_open_conns"`
+	MaxIdleConns    int            `json:"max_idle_conns"`
+	ConnMaxLifetime int            `json:"conn_max_lifetime_seconds"`
+	ConnMaxIdleTime int            `json:"conn_max_idle_time_seconds"`
+	Metadata        map[string]any `json:"metadata"`
 }
 
 func (s *DBConnService) Create(ctx context.Context, req *CreateDBConnectionRequest, userID uint) (*models.DatabaseConnection, error) {
